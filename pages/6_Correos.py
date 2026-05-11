@@ -5,7 +5,7 @@ from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from src.models import get_email_templates, get_emails_sent, get_all_leaks
+from src.models import get_email_templates, get_emails_sent, get_all_leaks, mark_leaks_solicitadas
 from src.mailer import enviar_correo
 from src.reports import generar_pdf_fugas
 from src.db import get_connection
@@ -120,15 +120,45 @@ with tab_envio:
         st.markdown(f"##### Paso 2 · Selecciona las fugas a incluir ({tipo})")
 
         df_fugas = get_all_leaks({"solo_no_reparadas": True})
+        es_ot = "OT" in tipo
+
+        incluir_solicitadas = False
+        if es_ot and not df_fugas.empty:
+            n_solicitadas = int((df_fugas["ot_estado"] == "Solicitada").sum())
+            incluir_solicitadas = st.checkbox(
+                f"Incluir fugas ya solicitadas por correo ({n_solicitadas})",
+                value=False,
+                key="wiz_incluir_solicitadas",
+                help="Por defecto se ocultan las fugas con OT ya solicitada para evitar reenvíos accidentales.",
+            )
+            if not incluir_solicitadas:
+                df_fugas = df_fugas[df_fugas["ot_estado"] != "Solicitada"]
+
         if df_fugas.empty:
             empty_state("🔍", "Sin fugas pendientes", "No hay fugas sin reparar para incluir en el correo.")
         else:
+            df_fugas = df_fugas.reset_index(drop=True)
             df_fugas["Comentario"] = df_fugas["comments_original"].fillna("").str.slice(0, 60)
+
+            cols_show = ["leak_id", "address", "leak_type", "dias_sin_reparar", "prioridad_final", "Comentario"]
+            rename_map = {
+                "leak_id": "Leak ID", "address": "Dirección", "leak_type": "Tipo",
+                "dias_sin_reparar": "Días", "prioridad_final": "Prioridad",
+            }
+
+            if es_ot and incluir_solicitadas:
+                df_fugas["Solicitada"] = df_fugas.apply(
+                    lambda r: (
+                        f"✉️ {str(r['ot_fecha_solicitud'])[:10]}"
+                        if r.get("ot_estado") == "Solicitada" and r.get("ot_fecha_solicitud")
+                        else ("✉️ sí" if r.get("ot_estado") == "Solicitada" else "")
+                    ),
+                    axis=1,
+                )
+                cols_show.append("Solicitada")
+
             sel = st.dataframe(
-                df_fugas[["leak_id", "address", "leak_type", "dias_sin_reparar", "prioridad_final", "Comentario"]].rename(columns={
-                    "leak_id": "Leak ID", "address": "Dirección", "leak_type": "Tipo",
-                    "dias_sin_reparar": "Días", "prioridad_final": "Prioridad",
-                }),
+                df_fugas[cols_show].rename(columns=rename_map),
                 use_container_width=True, hide_index=True,
                 on_select="rerun", selection_mode="multi-row",
                 key="wiz_table_fugas", height=400,
@@ -138,7 +168,20 @@ with tab_envio:
             st.session_state["wiz_leak_ids"] = sel_ids
 
             if sel_ids:
-                st.success(f"✓ **{len(sel_ids)} fuga(s) seleccionada(s)**")
+                if es_ot:
+                    n_resel = int(
+                        df_fugas[df_fugas["leak_id"].isin(sel_ids)]["ot_estado"]
+                        .eq("Solicitada")
+                        .sum()
+                    )
+                    if n_resel > 0:
+                        st.warning(
+                            f"⚠️ {n_resel} de las {len(sel_ids)} fugas seleccionadas ya tienen OT solicitada previamente."
+                        )
+                    else:
+                        st.success(f"✓ **{len(sel_ids)} fuga(s) seleccionada(s)**")
+                else:
+                    st.success(f"✓ **{len(sel_ids)} fuga(s) seleccionada(s)**")
             else:
                 st.info("💡 Marca las casillas para seleccionar las fugas a incluir en el correo.")
 
@@ -179,6 +222,19 @@ with tab_envio:
             cuerpo = cuerpo_base
 
         destinatario = config.get("destinatarios", {}).get("fijo", "(no configurado)")
+        es_ot = "OT" in tipo
+
+        # Detectar fugas ya solicitadas dentro de la selección (solo flujo OT)
+        n_ya_solicitadas = 0
+        if es_ot and leak_ids:
+            conn_check = get_connection()
+            placeholders = ",".join("?" * len(leak_ids))
+            row_chk = conn_check.execute(
+                f"SELECT COUNT(*) FROM leaks WHERE leak_id IN ({placeholders}) AND ot_estado = 'Solicitada'",
+                leak_ids,
+            ).fetchone()
+            conn_check.close()
+            n_ya_solicitadas = int(row_chk[0]) if row_chk else 0
 
         # Resumen
         col_dest1, col_dest2 = st.columns(2)
@@ -188,6 +244,19 @@ with tab_envio:
         with col_dest2:
             st.markdown(f"**💧 Fugas:** {n_fugas}")
             st.markdown(f"**📎 Adjunto:** PDF auto-generado")
+
+        if n_ya_solicitadas > 0:
+            st.warning(
+                f"⚠️ {n_ya_solicitadas} de las {n_fugas} fugas ya fueron solicitadas previamente por correo. "
+                "Se reenviará la solicitud y se actualizará la fecha de solicitud."
+            )
+            confirmar_reenvio = st.checkbox(
+                "Confirmo reenviar las fugas ya solicitadas",
+                value=False,
+                key="wiz_confirmar_reenvio",
+            )
+        else:
+            confirmar_reenvio = True
 
         st.markdown("---")
 
@@ -223,7 +292,9 @@ with tab_envio:
             except Exception as e:
                 st.warning(f"No se pudo generar PDF: {e}")
         with col_b3:
-            if st.button("📤 Enviar correo", type="primary", use_container_width=True):
+            enviar_disabled = (n_ya_solicitadas > 0 and not confirmar_reenvio)
+            if st.button("📤 Enviar correo", type="primary",
+                          use_container_width=True, disabled=enviar_disabled):
                 with st.spinner("Generando PDF y enviando..."):
                     tipo_pdf = "OT" if "OT" in tipo else "Recordatorio"
                     try:
@@ -234,7 +305,7 @@ with tab_envio:
                         ok, mensaje = enviar_correo(asunto_edit, cuerpo_final, pdf_bytes, pdf_nombre)
 
                         conn = get_connection()
-                        conn.execute(
+                        cur = conn.execute(
                             """INSERT INTO emails_sent (fecha_envio, destinatario, asunto, tipo,
                                leak_ids, cuerpo_html, pdf_adjunto, enviado_ok, error_mensaje)
                                VALUES (?,?,?,?,?,?,?,?,?)""",
@@ -243,15 +314,26 @@ with tab_envio:
                              pdf_bytes if ok else None,
                              1 if ok else 0, "" if ok else mensaje)
                         )
+                        email_id = cur.lastrowid
                         conn.commit()
                         conn.close()
+
+                        n_marcadas = 0
+                        if ok and tipo_pdf == "OT":
+                            n_marcadas = mark_leaks_solicitadas(leak_ids, email_id)
 
                         if ok:
                             st.toast(f"✅ Correo enviado a {destinatario}", icon="📧")
                             st.success(mensaje)
+                            if tipo_pdf == "OT" and n_marcadas > 0:
+                                st.info(
+                                    f"📋 {n_marcadas} fuga(s) marcadas como 'Solicitada' "
+                                    "para evitar reenvíos accidentales."
+                                )
                             # Reset wizard
                             for k in ["paso_correo", "wiz_tipo", "wiz_leak_ids",
-                                       "wiz_asunto", "wiz_cuerpo"]:
+                                       "wiz_asunto", "wiz_cuerpo",
+                                       "wiz_incluir_solicitadas", "wiz_confirmar_reenvio"]:
                                 st.session_state.pop(k, None)
                         else:
                             st.error(f"❌ {mensaje}")
@@ -262,7 +344,8 @@ with tab_envio:
         # Botón resetear wizard
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🔄 Empezar de nuevo (resetear wizard)"):
-            for k in ["paso_correo", "wiz_tipo", "wiz_leak_ids", "wiz_asunto", "wiz_cuerpo"]:
+            for k in ["paso_correo", "wiz_tipo", "wiz_leak_ids", "wiz_asunto", "wiz_cuerpo",
+                      "wiz_incluir_solicitadas", "wiz_confirmar_reenvio"]:
                 st.session_state.pop(k, None)
             st.rerun()
 
