@@ -214,14 +214,17 @@ def render_detalle(leak_id: int):
     with t_ot:
         st.markdown("##### 📋 Estado de la Orden de Trabajo")
 
-        ot_estados_opts = ["Pendiente por generar", "Generada", "Finalizada"]
+        ot_estados_opts = ["Pendiente por generar", "Solicitada", "Generada", "Finalizada"]
         ot_idx = ot_estados_opts.index(leak.get("ot_estado")) if leak.get("ot_estado") in ot_estados_opts else 0
         ot_estado = st.radio("Estado OT", ot_estados_opts, index=ot_idx, horizontal=True, key="det_ot_estado")
+
+        if leak.get("ot_estado") == "Solicitada" and leak.get("ot_fecha_solicitud"):
+            st.caption(f"✉️ Solicitada por correo el {str(leak['ot_fecha_solicitud'])[:10]}")
 
         ot_numero = st.text_input(
             "Número de OT", value=leak.get("ot_numero") or "",
             placeholder="Ej. OT-2026-1234", key="det_ot_num",
-            disabled=(ot_estado == "Pendiente por generar"),
+            disabled=(ot_estado in ("Pendiente por generar", "Solicitada")),
         )
 
         col_f1, col_f2 = st.columns(2)
@@ -485,23 +488,27 @@ with tab_ot:
     df_all_ot = get_all_leaks()
 
     ot_pendiente = df_all_ot[df_all_ot["ot_estado"] == "Pendiente por generar"]
+    ot_solicitada = df_all_ot[df_all_ot["ot_estado"] == "Solicitada"]
     ot_generada = df_all_ot[df_all_ot["ot_estado"] == "Generada"]
     ot_finalizada = df_all_ot[df_all_ot["ot_estado"] == "Finalizada"]
 
     # KPIs
-    k1, k2, k3 = st.columns(3)
+    k1, k2, k3, k4 = st.columns(4)
     from src.ui import kpi_card
     with k1:
         kpi_card("Pendientes por generar", len(ot_pendiente), color="warning", icon="⏳")
     with k2:
-        kpi_card("Generadas (en curso)", len(ot_generada), color="primary", icon="📋")
+        kpi_card("Solicitadas por correo", len(ot_solicitada), color="warning", icon="✉️")
     with k3:
+        kpi_card("Generadas (en curso)", len(ot_generada), color="primary", icon="📋")
+    with k4:
         kpi_card("Finalizadas", len(ot_finalizada), color="success", icon="✅")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    tab_p, tab_g, tab_f = st.tabs([
+    tab_p, tab_s, tab_g, tab_f = st.tabs([
         f"⏳ Pendientes ({len(ot_pendiente)})",
+        f"✉️ Solicitadas ({len(ot_solicitada)})",
         f"📋 Generadas ({len(ot_generada)})",
         f"✅ Finalizadas ({len(ot_finalizada)})",
     ])
@@ -514,6 +521,12 @@ with tab_ot:
             empty_state("✅", "Sin OTs pendientes", "Todas las fugas tienen OT asignada.")
         else:
             st.dataframe(ot_pendiente[cols_show], use_container_width=True, hide_index=True)
+    with tab_s:
+        if ot_solicitada.empty:
+            empty_state("✉️", "Sin OTs solicitadas", "No hay fugas pendientes de respuesta del contratista.")
+        else:
+            st.dataframe(ot_solicitada[cols_show + ["ot_fecha_solicitud"]],
+                          use_container_width=True, hide_index=True)
     with tab_g:
         if ot_generada.empty:
             empty_state("📋", "Sin OTs en curso", "No hay OTs generadas pendientes de finalizar.")

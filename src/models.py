@@ -12,7 +12,8 @@ def get_all_leaks(filtros: dict = None) -> pd.DataFrame:
                l.prioridad_auto, l.prioridad_manual, l.prioridad_final,
                l.score_prioridad, l.motivo_prioridad, l.estado_interno,
                l.ot_estado, l.ot_numero, l.ot_fecha_generacion,
-               l.ot_fecha_finalizacion, l.notas_internas,
+               l.ot_fecha_finalizacion, l.ot_fecha_solicitud, l.ot_email_id,
+               l.notas_internas,
                l.alerta_antiguedad, l.dias_sin_reparar, l.discrepancia_excel,
                p.investigation_result, p.visible
         FROM leaks l
@@ -226,6 +227,38 @@ def update_leak_internal(leak_id: int, campos: dict, origen: str = "usuario"):
     conn.execute(f"UPDATE leaks SET {set_clause}, last_updated_at=? WHERE leak_id=?", vals)
     conn.commit()
     conn.close()
+
+
+def mark_leaks_solicitadas(leak_ids: list, email_id: int) -> int:
+    """Marca las fugas como 'Solicitada' tras envío exitoso de correo OT.
+
+    Solo actualiza fugas cuyo ot_estado actual es 'Pendiente por generar' o NULL,
+    para no degradar las que ya están 'Generada' o 'Finalizada'. Registra cada
+    cambio en status_history vía update_leak_internal.
+
+    Retorna cuántas fugas fueron efectivamente actualizadas.
+    """
+    if not leak_ids:
+        return 0
+    actualizadas = 0
+    for lid in leak_ids:
+        leak = get_leak_by_id(int(lid))
+        if not leak:
+            continue
+        estado_actual = leak.get("ot_estado")
+        if estado_actual not in (None, "", "Pendiente por generar"):
+            continue
+        update_leak_internal(
+            int(lid),
+            {
+                "ot_estado": "Solicitada",
+                "ot_fecha_solicitud": now_iso(),
+                "ot_email_id": int(email_id),
+            },
+            origen="correo_ot",
+        )
+        actualizadas += 1
+    return actualizadas
 
 
 def get_email_templates() -> pd.DataFrame:

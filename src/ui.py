@@ -50,6 +50,7 @@ ALERTA_LABEL = {
 
 OT_COLOR = {
     "Pendiente por generar": COLOR["text_2"],
+    "Solicitada":            COLOR["warning"],
     "Generada":              COLOR["primary"],
     "Finalizada":            COLOR["success"],
 }
@@ -559,10 +560,16 @@ def ot_pill(ot_estado: str) -> str:
         return ''
     klass = {
         "Pendiente por generar": "pill-neutral",
+        "Solicitada": "pill-warning",
         "Generada": "pill-primary",
         "Finalizada": "pill-success",
     }.get(ot_estado, "pill-neutral")
-    icon = {"Pendiente por generar": "⏳", "Generada": "📋", "Finalizada": "✅"}.get(ot_estado, "•")
+    icon = {
+        "Pendiente por generar": "⏳",
+        "Solicitada": "✉️",
+        "Generada": "📋",
+        "Finalizada": "✅",
+    }.get(ot_estado, "•")
     return f'<span class="pill {klass}">{icon} {ot_estado}</span>'
 
 

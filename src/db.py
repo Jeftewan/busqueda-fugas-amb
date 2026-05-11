@@ -130,6 +130,14 @@ def init_db():
     );
     """)
 
+    # Migración: columnas para seguimiento de solicitud OT por correo
+    c.execute("PRAGMA table_info(leaks)")
+    cols = {r[1] for r in c.fetchall()}
+    if "ot_fecha_solicitud" not in cols:
+        c.execute("ALTER TABLE leaks ADD COLUMN ot_fecha_solicitud TEXT")
+    if "ot_email_id" not in cols:
+        c.execute("ALTER TABLE leaks ADD COLUMN ot_email_id INTEGER")
+
     # Pre-cargar plantillas de correo si no existen
     c.execute("SELECT COUNT(*) FROM email_templates")
     if c.fetchone()[0] == 0:
