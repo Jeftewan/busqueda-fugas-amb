@@ -1,0 +1,10 @@
+INSTRUCCIONES DE INSTALACIÓN
+============================
+
+1. Instalar Python 3.10 o superior desde https://python.org
+
+2. Doble clic en run.bat (Windows) o ejecutar ./run.sh (Linux/Mac)
+
+3. Esperar a que se abra el navegador en http://localhost:8501
+
+Para configurar el envío de correos, ir a la página ⚙️ Configuración.

@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/fugas.db
+data/excel_archive/
+*.egg-info/
+dist/
+build/
+.DS_Store

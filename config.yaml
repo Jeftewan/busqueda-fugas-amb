@@ -1,0 +1,45 @@
+smtp:
+  host: smtp.gmail.com
+  port: 587
+  user: ""
+  password: ""              # App password de Gmail (16 caracteres)
+  remitente_nombre: "Seguimiento Fugas - Acueducto"
+
+destinatarios:
+  fijo: ""                  # Configurar antes de enviar correos
+
+umbrales_antiguedad:
+  red_principal:    { atencion: 4,  urgente: 8,  critica: 16 }
+  red_secundaria:   { atencion: 8,  urgente: 16, critica: 31 }
+  customer_side:    { atencion: 16, urgente: 31, critica: 61 }
+
+prioridad:
+  pesos:
+    palabra_alta: 50
+    palabra_media: 20
+    palabra_baja: -10
+    main: 30
+    service: 10
+    customer_side: -10
+    other: 0
+    visible: 15
+    dia_pendiente: 1
+    cap_dias: 60
+  umbrales:
+    alta: 70
+    media: 30
+
+palabras_clave:
+  alta: [prioritari, urgente, urgencia, inmediat, critic, emergencia,
+         "red principal", principal, matriz, hidrante, "válvula principal",
+         "valvula principal", visible, "mucha agua", "gran fuga",
+         inunda, borbot, chorro, pavimento, asfalto, "vía pública",
+         "via publica"]
+  media: [acometida, válvula, valvula, collarín, collarin, racor,
+          cajilla, registro]
+  baja: ["fuga interna", interna, "se le informa al usuario", usuario,
+         "propiedad privada", predio, recomienda, "casa en construcción",
+         construcción, fraude, "sin medidor por hurto"]
+
+clusters:
+  radio_metros: 100

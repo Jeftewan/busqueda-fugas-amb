@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" width="280" height="64">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4FB8E6"/>
+      <stop offset="100%" style="stop-color:#0B6E99"/>
+    </linearGradient>
+  </defs>
+  <!-- Gota -->
+  <path d="M32 8 C 22 22, 14 32, 14 42 C 14 51, 22 58, 32 58 C 42 58, 50 51, 50 42 C 50 32, 42 22, 32 8 Z"
+        fill="url(#grad)"/>
+  <path d="M22 40 C 22 46, 26 50, 32 50 L 32 46 C 28 46, 26 44, 26 40 Z"
+        fill="rgba(255,255,255,0.4)"/>
+  <!-- Texto -->
+  <text x="64" y="32" font-family="Inter, sans-serif" font-size="18" font-weight="700" fill="#0F2A3E">
+    Seguimiento
+  </text>
+  <text x="64" y="50" font-family="Inter, sans-serif" font-size="13" font-weight="500" fill="#5C7184">
+    de Fugas · Acueducto
+  </text>
+</svg>
